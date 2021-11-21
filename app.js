@@ -23,26 +23,20 @@ window.addEventListener("hashchange", function () {
 });
 
 for (let i = 0; i < newsFeed.length; i++) {
-	const li = document.createElement("li");
-	const a = document.createElement("a");
+	// li, a 태그를 문자열로 사용하여 가독성을 높이고, innerHTML을 사용하여 DOM으로 변환하는 역할
+	// 화면에 사용되지는 않는다.
+	const div = document.createElement("div");
+	div.innerHTML = `
+		<li>
+			<a href="#${newsFeed[i].id}">
+				${newsFeed[i].title}(${newsFeed[i].comments_count})
+			</a>
+		</li>
+	`;
 
-	a.innerHTML = `${newsFeed[i].title}(${newsFeed[i].comments_count})`;
-	a.href = `#${newsFeed[i].id}`;
-	// hash : 일종의 북마크로, hash 값이 변경되면 그 값과 일치하는 name을 가진 anker로 스크롤한다.(또는 값과 일치하는 id를 가진 요소로 스크롤)
-	// ex> #  =>  #david 으로 hash 값이 변경되면 david 라는 name을 가진 anker로 스크롤(또는 david 라는 id를 가진 element로 스크롤)
-
-	// a.addEventListener("click", function () {});
-	// 각 anker 마다 이벤트를 등록할 수 있으나, 모든 요소에 이벤트를 등록하면 비효율적이다.
-	// anker의 href 값으로 "#무언가" 를 저장하면 클릭시 hashchange 이벤트가 발생하는 것을 이용하여 한 번만 이벤트를 등록하자.
-	// hash를 전역state로 사용, onhashchange 이벤트에 콜백 등록
-
-	li.appendChild(a);
-	ul.appendChild(li);
+	// ul.appendChild(div.children[0]);
+	ul.appendChild(div.firstElementChild);
 }
 
 container.appendChild(ul);
 container.appendChild(content);
-
-`
-<li></li>
-`;
