@@ -5,26 +5,28 @@ const ajax = new XMLHttpRequest();
 const content = document.createElement("div");
 const NEWS_URL = "https://api.hnpwa.com/v0/news/1.json";
 const CONTENT_URL = "https://api.hnpwa.com/v0/item/@id.json"; // hacker-news individual items
-ajax.open("GET", NEWS_URL, false);
-ajax.send();
 
-const newsFeed = JSON.parse(ajax.response);
+// 중복된 기능을 하나로 묶음
+function getData(url) {
+	ajax.open("GET", url, false);
+	ajax.send();
+
+	return JSON.parse(ajax.response);
+}
+
+const newsFeed = getData(NEWS_URL);
 const ul = document.createElement("ul");
 
 window.addEventListener("hashchange", function () {
 	const id = location.hash.substr(1);
-	ajax.open("GET", CONTENT_URL.replace("@id", id), false);
-	ajax.send();
-
-	const newsContent = JSON.parse(ajax.response);
+	const newsContent = getData(CONTENT_URL.replace("@id", id));
 	const title = document.createElement("h1");
+
 	title.innerHTML = newsContent.title;
 	content.appendChild(title);
 });
 
 for (let i = 0; i < newsFeed.length; i++) {
-	// li, a 태그를 문자열로 사용하여 가독성을 높이고, innerHTML을 사용하여 DOM으로 변환하는 역할
-	// 화면에 사용되지는 않는다.
 	const div = document.createElement("div");
 	div.innerHTML = `
 		<li>
