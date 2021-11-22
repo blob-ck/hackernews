@@ -5,6 +5,10 @@ const ajax = new XMLHttpRequest();
 const content = document.createElement("div");
 const NEWS_URL = "https://api.hnpwa.com/v0/news/1.json";
 const CONTENT_URL = "https://api.hnpwa.com/v0/item/@id.json"; // hacker-news individual items
+const store = {
+	currentPage: 1,
+	pageSize: 10, //페이지 사이즈 추가
+};
 
 function getData(url) {
 	ajax.open("GET", url, false);
@@ -13,49 +17,59 @@ function getData(url) {
 	return JSON.parse(ajax.response);
 }
 
-// 화면전환을 중계하는 라우터를 작성하기 전,
-// 화면전환시 목록 렌더링을 호출하므로
-// 목록을 그려낼 소스를 재사용가능하도록 함수로 만든다.
+// 페이징 적용하기
 function newsFeed() {
 	const newsFeed = getData(NEWS_URL);
+	const startFeedNumber = (store.currentPage - 1) * store.pageSize;
+	const endFeedNumber = Math.min(store.currentPage * store.pageSize, newsFeed.length);
+
+	if (newsFeed.length === 0) return console.log("No more news feeds");
+
 	const newsList = [];
 
 	newsList.push("<ul>");
 
-	for (let i = 0; i < newsFeed.length; i++) {
+	for (let i = startFeedNumber; i < endFeedNumber; i++) {
+		// router에서 특정페이지의 목록과 특정상세화면을 분기하기 위해 show, page 등을 붙여 구분한다.
 		newsList.push(`
 	<li>
-		<a href="#${newsFeed[i].id}">
+		<a href="#/show/${newsFeed[i].id}">
 		${newsFeed[i].title}(${newsFeed[i].comments_count})
 		</a>
-	</li>
+	</li> 
 	`);
 	}
 
 	newsList.push("</ul>");
-
+	newsList.push(`
+		<div>
+			<a href="#/page/${store.currentPage - 1 > 0 ? store.currentPage - 1 : 1}">이전 페이지</a>
+			<a href="#/page/${newsFeed.length !== endFeedNumber ? store.currentPage + 1 : store.currentPage}">다음 페이지</a>
+		</div>
+	`);
 	container.innerHTML = newsList.join("");
 }
 
 function newsDetail() {
-	const id = location.hash.substr(1);
+	const id = location.hash.substr(7);
 	const newsContent = getData(CONTENT_URL.replace("@id", id));
 
 	container.innerHTML = `
 		<h1>${newsContent.title}</h1>
 		<div>
-			<a href="#">목록으로</a>
+			<a href="#/page/${store.currentPage}">목록으로</a>
 		</div>
 	`;
 }
 
-// hash값의 변화에 따라 화면전환을 하므로,
-// hashchange 이벤트로 router를 등록하고 hash값으로 화면전환한다.
 function router() {
 	const routePath = location.hash;
 
-	// location.hash 에 # 만 있을 경우에는 빈 문자열을 반환한다.
 	if (routePath === "") {
+		newsFeed();
+	} else if (routePath.indexOf("/page/") >= 0) {
+		// 상태저장 변수인 store 는 전용 getter/setter 를 만들어 사용하는게 유지보수에 더 좋지 않나?
+		store.currentPage = Number(routePath.substr(7));
 		newsFeed();
 	} else {
 		newsDetail();
