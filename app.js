@@ -7,7 +7,7 @@ const NEWS_URL = "https://api.hnpwa.com/v0/news/1.json";
 const CONTENT_URL = "https://api.hnpwa.com/v0/item/@id.json"; // hacker-news individual items
 const store = {
 	currentPage: 1,
-	pageSize: 10, //페이지 사이즈 추가
+	pageSize: 10,
 };
 
 function getData(url) {
@@ -17,20 +17,29 @@ function getData(url) {
 	return JSON.parse(ajax.response);
 }
 
-// 페이징 적용하기
 function newsFeed() {
 	const newsFeed = getData(NEWS_URL);
-	const startFeedNumber = (store.currentPage - 1) * store.pageSize;
-	const endFeedNumber = Math.min(store.currentPage * store.pageSize, newsFeed.length);
-
 	if (newsFeed.length === 0) return console.log("No more news feeds");
+	const startFeedNumber = (store.currentPage - 1) * store.pageSize;
+	const endFeedNumber = Math.min(store.currentPage * store.pageSize, newsFeed.length) - 1;
 
 	const newsList = [];
+	// 템플릿으로 분산된 마크업을 한곳에 모아 복잡성을 줄인다.(ui 가독성을 높이기 위함)
+	// tailwindcss cdn 방식으로 사용 및 class 에 적용
+	let template = `
+		<div class="container mx-auto p-4">
+			<h1>Hacker News</h1>
+			<ul>
+				{{__news_feed__}}
+			</ul>
+			<div>
+				<a href="#{{__prev_page__}}">이전 페이지</a>
+				<a href="#{{__next_page__}}">다음 페이지</a>
+			</div>
+		</div>
+	`;
 
-	newsList.push("<ul>");
-
-	for (let i = startFeedNumber; i < endFeedNumber; i++) {
-		// router에서 특정페이지의 목록과 특정상세화면을 분기하기 위해 show, page 등을 붙여 구분한다.
+	for (let i = startFeedNumber; i <= endFeedNumber; i++) {
 		newsList.push(`
 	<li>
 		<a href="#/show/${newsFeed[i].id}">
@@ -40,14 +49,11 @@ function newsFeed() {
 	`);
 	}
 
-	newsList.push("</ul>");
-	newsList.push(`
-		<div>
-			<a href="#/page/${store.currentPage - 1 > 0 ? store.currentPage - 1 : 1}">이전 페이지</a>
-			<a href="#/page/${newsFeed.length !== endFeedNumber ? store.currentPage + 1 : store.currentPage}">다음 페이지</a>
-		</div>
-	`);
-	container.innerHTML = newsList.join("");
+	template = template.replace("{{__news_feed__}}", newsList.join(""));
+	template = template.replace("{{__prev_page__}}", store.currentPage - 1 > 0 ? store.currentPage - 1 : 1);
+	template = template.replace("{{__next_page__}}", newsFeed.length - 1 !== endFeedNumber ? store.currentPage + 1 : store.currentPage);
+
+	container.innerHTML = template;
 }
 
 function newsDetail() {
@@ -68,7 +74,6 @@ function router() {
 	if (routePath === "") {
 		newsFeed();
 	} else if (routePath.indexOf("/page/") >= 0) {
-		// 상태저장 변수인 store 는 전용 getter/setter 를 만들어 사용하는게 유지보수에 더 좋지 않나?
 		store.currentPage = Number(routePath.substr(7));
 		newsFeed();
 	} else {
