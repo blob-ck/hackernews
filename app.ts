@@ -1,5 +1,10 @@
 // https://github.com/tastejs/hacker-news-pwas/blob/master/docs/api.md
 // https://developer.mozilla.org/ko/docs/Web/API/XMLHttpRequest
+
+// typescript 로 전환
+// tsconfig.json 생성
+// parcel(bundler & transpiler) 이 javascript로 컴파일
+// sourcemap 파일 : 컴파일된 js와 사람이 작성한 ts파일의 연결점 for 디버깅
 const container = document.getElementById("root");
 const ajax = new XMLHttpRequest();
 const content = document.createElement("div");
@@ -8,8 +13,7 @@ const CONTENT_URL = "https://api.hnpwa.com/v0/item/@id.json"; // hacker-news ind
 const store = {
 	currentPage: 1,
 	pageSize: 10,
-	feeds: [], // 캐싱 및 읽음 표시 추가
-};
+	feeds: [],
 
 function getData(url) {
 	ajax.open("GET", url, false);
@@ -18,7 +22,6 @@ function getData(url) {
 	return JSON.parse(ajax.response);
 }
 
-// 읽지않음 초기값 세팅 (함수명이 안어울리는듯 하지만... )
 function makeFeeds(feeds) {
 	for (let i = 0; i < feeds.length; i++) {
 		feeds[i].read = false;
