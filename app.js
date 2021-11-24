@@ -8,6 +8,7 @@ const CONTENT_URL = "https://api.hnpwa.com/v0/item/@id.json"; // hacker-news ind
 const store = {
 	currentPage: 1,
 	pageSize: 10,
+	feeds: [], // 캐싱 및 읽음 표시 추가
 };
 
 function getData(url) {
@@ -17,12 +18,20 @@ function getData(url) {
 	return JSON.parse(ajax.response);
 }
 
-// ui작업은 크게 3가지 : [ 디자인, 폰트, 아이콘 ]
-// 이 중 아이콘은 font-awsome 라이브러리 사용
-// cdnjs.com 에서 fontawosome 검색하여 cdn 적용
+// 읽지않음 초기값 세팅 (함수명이 안어울리는듯 하지만... )
+function makeFeeds(feeds) {
+	for (let i = 0; i < feeds.length; i++) {
+		feeds[i].read = false;
+	}
+
+	return feeds;
+}
+
 function newsFeed() {
-	const newsFeed = getData(NEWS_URL);
-	if (newsFeed.length === 0) return console.log("No more news feeds");
+	let newsFeed = store.feeds;
+	if (newsFeed.length === 0) {
+		newsFeed = store.feeds = makeFeeds(getData(NEWS_URL));
+	}
 	const startFeedNumber = (store.currentPage - 1) * store.pageSize;
 	const endFeedNumber = Math.min(store.currentPage * store.pageSize, newsFeed.length) - 1;
 
@@ -49,17 +58,17 @@ function newsFeed() {
 				</div>
 			</div>
 			<div class="p-4 text-2xl text-gray-700">
-				{{__news_feed__}}        
+				{{__news_feed__}}
 			</div>
 		</div>
 	`;
 
 	for (let i = startFeedNumber; i <= endFeedNumber; i++) {
 		newsList.push(`
-			<div class="p-6 ${newsFeed[i].read ? "bg-red-500" : "bg-white"} mt-6 rounded-lg shadow-md transition-colors duration-500 hover:bg-green-100">
+			<div class="p-6 ${newsFeed[i].read ? "bg-yellow-500" : "bg-white"} mt-6 rounded-lg shadow-md transition-colors duration-500 hover:bg-green-100">
 				<div class="flex">
 					<div class="flex-auto">
-						<a href="#/show/${newsFeed[i].id}">${newsFeed[i].title}</a>  
+						<a href="#/show/${newsFeed[i].id}">${newsFeed[i].title}</a>
 					</div>
 					<div class="text-center text-sm">
 						<div class="w-10 text-white bg-green-300 rounded-lg px-0 py-2">${newsFeed[i].comments_count}</div>
@@ -70,14 +79,12 @@ function newsFeed() {
 						<div><i class="fas fa-user mr-1"></i>${newsFeed[i].user}</div>
 						<div><i class="fas fa-heart mr-1"></i>${newsFeed[i].points}</div>
 						<div><i class="far fa-clock mr-1"></i>${newsFeed[i].time_ago}</div>
-					</div>  
+					</div>
 				</div>
-			</div>  
+			</div>
 		`);
 	}
 
-	// 템플릿을 적용하긴 했지만 데이터를 매핑할 때마다 replace를 하고 있어 좋은 패턴은 아니다.
-	// ==> 템플릿에 반복되는 작업을 데이터 갯수만큼 코드를 작성했다.
 	template = template.replace("{{__news_feed__}}", newsList.join(""));
 	template = template.replace("{{__prev_page__}}", store.currentPage - 1 > 0 ? store.currentPage - 1 : 1);
 	template = template.replace("{{__next_page__}}", newsFeed.length - 1 !== endFeedNumber ? store.currentPage + 1 : store.currentPage);
@@ -114,12 +121,16 @@ function newsDetail() {
         {{__comments__}}
 
       </div>
-    </div>	
+    </div>
 	`;
 
-	// commnets 의 각 요소안에도 comments 가 있을 수 있다. (대댓글)
-	// while 과 recursion 이 떠오르나 여기서는 recursion 을 적용,
-	// makeComment가 호출된 횟수로 대댓글 indent를 적용
+	for (let i = 0; i < store.feeds.length; i++) {
+		if (Number(store.feeds[i].id) == Number(id)) {
+			store.feeds[i].read = true;
+			break;
+		}
+	}
+
 	function makeComment(comments, called = 0) {
 		const commentString = [];
 		for (let i = 0; i < comments.length; i++) {
@@ -130,7 +141,7 @@ function newsDetail() {
 						<strong>${comments[i].user}</strong> ${comments[i].time_ago}
 					</div>
 					<p class="text-gray-700">${comments[i].content}</p>
-				</div>  
+				</div>
 			`);
 
 			if (comments[i].comments.length > 0) {
@@ -141,7 +152,6 @@ function newsDetail() {
 		return commentString.join("");
 	}
 
-	// innerHTML 에 배열을 할당해도  각 원소를 toString() 하여 렌더링한다.
 	container.innerHTML = template.replace("{{__comments__}}", makeComment(newsContent.comments));
 }
 
