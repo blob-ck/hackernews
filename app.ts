@@ -4,45 +4,37 @@ type Store = {
 	feeds: NewsFeed[];
 }
 
-type NewsFeed = {
+// type alias 도 중복되는 속성을 묶을 수 있다.
+// intersection 이라 부르는 기능으로,
+// type [Alias] = [CommonAlias] & {[property]:[type];} 으로 사용가능
+type News = {
 	id: number;
-	title: string;
-	points: number;
-	user: string;
-	time: number;
 	time_ago: string;
+	time: number;
+	user: string;
 	comments_count: number;
 	type: string;
 	url: string;
+}
+
+type NewsFeed = News & {
+	title: string;
 	domain: string;
+	points: number;
 	read?: boolean;
 }
 
-type NewsDetail = {
-	id: number;
-	user: string;
+type NewsDetail = News & {
 	title: string;
-	content: string;
 	domain: string;
+	content: string;
 	points: number;
-	time: number;
-	time_ago: string;
-	type: string;
-	url: string;
-	comments_count: number;
 	comments: [];
 }
 
-type NewsComment = {
-	id: number;
+type NewsComment = News & {
 	level: number;
-	user: string;
 	content: string;
-	time: number;
-	time_ago: string;
-	type: string;
-	url: string;
-	comments_count: number;
 	comments: [];
 }
 
@@ -58,14 +50,21 @@ const store: Store = {
 	feeds: [],
 }
 
-function getData(url: string) {
+// getData는 사용하는 url 에 따라 반환하는 타입이 다를수 있디ㅏ.
+// 제너릭 : 입력이 n 개라면, 출력도 n 개로 정의함
+// function 함수명<type> 으로 사용한다.
+// 호출시 getData<NewsFeed[]>("http......");  이런 식
+// 반환타입을 특정type으로 받겠다고 명시하고 함수를 호출하므로 헷갈릴 일이 없다.
+// 호출시 함수에 추가 파라미터로 반환타입을 넘겼다고 생각하면 쉽다.
+// 또는 제네럭 함수는 wrapping함수이고, 호출시 반환타입을 특정하여 함수를 생성, 반환, 즉시호출한다고도 볼 수있다.
+function getData<AjaxResponse>(url: string): AjaxResponse {
 	ajax.open("GET", url, false);
 	ajax.send();
 
 	return JSON.parse(ajax.response);
 }
 
-function makeFeeds(feeds) {
+function makeFeeds(feeds: NewsFeed[]): NewsFeed[] {
 	for (let i = 0; i < feeds.length; i++) {
 		feeds[i].read = false;
 	}
@@ -73,7 +72,7 @@ function makeFeeds(feeds) {
 	return feeds;
 }
 
-function updateView(html) {
+function updateView(html: string): void {
 	if (container != null) {
 		container.innerHTML = html;
 	} else {
@@ -81,10 +80,11 @@ function updateView(html) {
 	}
 }
 
-function newsFeed() {
+function newsFeed(): void {
 	let newsFeed: NewsFeed[] = store.feeds;
 	if (newsFeed.length === 0) {
-		newsFeed = store.feeds = makeFeeds(getData(NEWS_URL));
+		// getData를 호출할 때 반환받을 타입을 명시
+		newsFeed = store.feeds = makeFeeds(getData<NewsFeed[]>(NEWS_URL));
 	}
 	const startFeedNumber = (store.currentPage - 1) * store.pageSize;
 	const endFeedNumber = Math.min(store.currentPage * store.pageSize, newsFeed.length) - 1;
@@ -138,15 +138,16 @@ function newsFeed() {
 	}
 
 	template = template.replace("{{__news_feed__}}", newsList.join(""));
-	template = template.replace("{{__prev_page__}}", store.currentPage - 1 > 0 ? store.currentPage - 1 : 1);
-	template = template.replace("{{__next_page__}}", newsFeed.length - 1 !== endFeedNumber ? store.currentPage + 1 : store.currentPage);
+	template = template.replace("{{__prev_page__}}", String(store.currentPage - 1 > 0 ? store.currentPage - 1 : 1));
+	template = template.replace("{{__next_page__}}", String(newsFeed.length - 1 !== endFeedNumber ? store.currentPage + 1 : store.currentPage));
 
 	updateView(template);
 }
 
 function newsDetail() {
 	const id = location.hash.substr(7);
-	const newsContent = getData(CONTENT_URL.replace("@id", id));
+	// getData를 호출할 때 반환받을 타입을 명시
+	const newsContent = getData<NewsDetail>(CONTENT_URL.replace("@id", id));
 	let template = `
     <div class="bg-gray-600 min-h-screen pb-8">
       <div class="bg-white text-xl">
@@ -183,28 +184,29 @@ function newsDetail() {
 		}
 	}
 
-	function makeComment(comments, called = 0) {
-		const commentString = [];
-		for (let i = 0; i < comments.length; i++) {
-			commentString.push(`
-				<div style="padding-left: ${called * 40}px;" class="mt-4">
+	updateView(template.replace("{{__comments__}}", makeComment(newsContent.comments)));
+}
+
+function makeComment(comments: NewsComment[]): string {
+	const commentString = [];
+	for (let i = 0; i < comments.length; i++) {
+		const comment: NewsComment = comments[i];
+		commentString.push(`
+				<div style="padding-left: ${comment.level * 40}px;" class="mt-4">
 					<div class="text-gray-400">
 						<i class="fa fa-sort-up mr-2"></i>
-						<strong>${comments[i].user}</strong> ${comments[i].time_ago}
+						<strong>${comment.user}</strong> ${comment.time_ago}
 					</div>
-					<p class="text-gray-700">${comments[i].content}</p>
+					<p class="text-gray-700">${comment.content}</p>
 				</div>
 			`);
 
-			if (comments[i].comments.length > 0) {
-				commentString.push(makeComment(comments[i].comments, called + 1));
-			}
+		if (comment.comments.length > 0) {
+			commentString.push(makeComment(comment.comments));
 		}
-
-		return commentString.join("");
 	}
 
-	updateView(template.replace("{{__comments__}}", makeComment(newsContent.comments)));
+	return commentString.join("");
 }
 
 function router() {
