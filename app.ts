@@ -1,40 +1,64 @@
 type Store = {
 	currentPage: number;
 	pageSize: number;
-	feeds: NewsFeed[]; //NewsFeed를 원소로 가지는 배열. Java의 제너릭 기능?
+	feeds: NewsFeed[];
 }
 
 type NewsFeed = {
 	id: number;
 	title: string;
-	comments_count: number;
-	user: string;
 	points: number;
+	user: string;
+	time: number;
 	time_ago: string;
+	comments_count: number;
+	type: string;
+	url: string;
+	domain: string;
 	read?: boolean;
 }
 
-// typescript 로 전환
-// tsconfig.json 생성
-// parcel(bundler & transpiler) 이 javascript로 컴파일
-// sourcemap 파일 : 컴파일된 js와 사람이 작성한 ts파일의 연결점 for 디버깅
+type NewsDetail = {
+	id: number;
+	user: string;
+	title: string;
+	content: string;
+	domain: string;
+	points: number;
+	time: number;
+	time_ago: string;
+	type: string;
+	url: string;
+	comments_count: number;
+	comments: [];
+}
+
+type NewsComment = {
+	id: number;
+	level: number;
+	user: string;
+	content: string;
+	time: number;
+	time_ago: string;
+	type: string;
+	url: string;
+	comments_count: number;
+	comments: [];
+}
+
 const container: HTMLElement | null = document.getElementById("root");
 const ajax: XMLHttpRequest = new XMLHttpRequest();
 const content = document.createElement("div");
 const NEWS_URL = "https://api.hnpwa.com/v0/news/1.json";
-const CONTENT_URL = "https://api.hnpwa.com/v0/item/@id.json"; // hacker-news individual items
+const CONTENT_URL = "https://api.hnpwa.com/v0/item/@id.json";
 
-// 객체 타입을 지정하는 방법은 2가지가 있는데
-// 1. type alias <=== 여기선 이거 적용
-// 2. interface
 const store: Store = {
-	currentPage: 1, // currentPage에 문자열을 할당하면 에러메시지를 보여준다.
+	currentPage: 1,
 	pageSize: 10,
 	feeds: [],
 }
 
-// 함수의 파라미터 타입을 지정하면 함수 호출시 선언을 보러 왔다갔다 할 시간을 절약한다.
-function getData(url) {
+function getData(url: string) {
 	ajax.open("GET", url, false);
 	ajax.send();
 
@@ -49,7 +73,6 @@ function makeFeeds(feeds) {
 	return feeds;
 }
 
-// 이런 객체접근 오류 등을 방지하기 위한 소스를 타입가드 라고 부른다.
 function updateView(html) {
 	if (container != null) {
 		container.innerHTML = html;
@@ -67,8 +90,6 @@ function newsFeed() {
 	const endFeedNumber = Math.min(store.currentPage * store.pageSize, newsFeed.length) - 1;
 
 	const newsList = [];
-	// 템플릿을 직접 만드는 것도 재미있지만, 큰 싸이클을 우선 돌리기 위해 라이브러리 사용해보기
-	// ==> handlebars, mustache
 	let template = `
 		<div class="bg-gray-600 min-h-screen">
 			<div class="bg-white text-xl">
@@ -120,9 +141,6 @@ function newsFeed() {
 	template = template.replace("{{__prev_page__}}", store.currentPage - 1 > 0 ? store.currentPage - 1 : 1);
 	template = template.replace("{{__next_page__}}", newsFeed.length - 1 !== endFeedNumber ? store.currentPage + 1 : store.currentPage);
 
-	// container 의 타입이 HTMLElement|null 이므로, null.innerHTML 에 접근하는 순간 에러 발생,
-	// 방어코드를 짜도록 경고한다.
-	// container.innerHTML = template;
 	updateView(template);
 }
 
@@ -186,9 +204,6 @@ function newsDetail() {
 		return commentString.join("");
 	}
 
-	// container 의 타입이 HTMLElement|null 이므로, null.innerHTML 에 접근하는 순간 에러 발생,
-	// 방어코드를 짜도록 경고한다.
-	// container.innerHTML = template.replace("{{__comments__}}", makeComment(newsContent.comments));
 	updateView(template.replace("{{__comments__}}", makeComment(newsContent.comments)));
 }
 
