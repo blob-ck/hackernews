@@ -1,4 +1,9 @@
-// type 두 가지[type alias, interface] 중 interface로 적용
+// 작업내용
+// 1. getData 클래스 변환
+// 2. 공통요소 뽑아내기
+// 3. 믹스인을 이용한 상속
+// 4. applyApiMixins
+
 interface Store {
 	currentPage: number;
 	pageSize: number;
@@ -36,8 +41,6 @@ interface NewsComment extends News {
 	comments: [];
 }
 
-// type alias는 아래 HTMLElement | null 처럼 union 타입을 지원하지만,
-// interface는 union타입을 사용하지 못한다.
 const container: HTMLElement | null = document.getElementById("root");
 const ajax: XMLHttpRequest = new XMLHttpRequest();
 const content = document.createElement("div");
@@ -50,6 +53,39 @@ const store: Store = {
 	feeds: [],
 }
 
+class Api {
+	url: string;
+	ajax: XMLHttpRequest;
+	constructor(url: string) {
+		this.url = url;
+		this.ajax = new XMLHttpRequest();
+	}
+
+	// 하위클래스에서 사용할 용도로 만든 메소드이므로,
+	// 인스턴스에서 직접호출하는 것을 막기 위해 protected 접근제한자 사용
+	protected getRequest<AjaxResponse>(): AjaxResponse {
+		this.ajax.open('GET', this.url, false);
+		this.ajax.send();
+
+		return JSON.parse(this.ajax.response);
+	}
+
+}
+
+// 아래 클래스단위로 쪼개는게 더 복잡하고 불필요해 보이지만,
+// 형식을 갖춘다는건 규모가 커졌을 때 빛을 발한다.
+class NewsFeedApi extends Api {
+	getData(): NewsFeed[] {
+		return this.getRequest<NewsFeed[]>();
+	}
+}
+
+class NewsDetailApi extends Api {
+	getData(): NewsDetail {
+		return this.getRequest<NewsDetail>();
+	}
+}
+
 function getData<AjaxResponse>(url: string): AjaxResponse {
 	ajax.open("GET", url, false);
 	ajax.send();
@@ -59,7 +95,7 @@ function getData<AjaxResponse>(url: string): AjaxResponse {
 
 function makeFeeds(feeds: NewsFeed[]): NewsFeed[] {
 	for (let i = 0; i < feeds.length; i++) {
-		feeds[i].read = false; // readonly로 설정하면 경고를 띄운다.
+		feeds[i].read = false;
 	}
 
 	return feeds;
@@ -74,9 +110,10 @@ function updateView(html: string): void {
 }
 
 function newsFeed(): void {
+	const api = new NewsFeedApi(NEWS_URL);
 	let newsFeed: NewsFeed[] = store.feeds;
 	if (newsFeed.length === 0) {
-		newsFeed = store.feeds = makeFeeds(getData<NewsFeed[]>(NEWS_URL));
+		newsFeed = store.feeds = makeFeeds(api.getData());
 	}
 	const startFeedNumber = (store.currentPage - 1) * store.pageSize;
 	const endFeedNumber = Math.min(store.currentPage * store.pageSize, newsFeed.length) - 1;
@@ -138,7 +175,8 @@ function newsFeed(): void {
 
 function newsDetail() {
 	const id = location.hash.substr(7);
-	const newsContent = getData<NewsDetail>(CONTENT_URL.replace("@id", id));
+	const api = new NewsDetailApi(CONTENT_URL.replace("@id", id));
+	const newsContent = api.getData();
 	let template = `
     <div class="bg-gray-600 min-h-screen pb-8">
       <div class="bg-white text-xl">
