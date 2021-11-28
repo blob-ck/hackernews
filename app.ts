@@ -1,30 +1,28 @@
-type Store = {
+// type 두 가지[type alias, interface] 중 interface로 적용
+interface Store {
 	currentPage: number;
 	pageSize: number;
 	feeds: NewsFeed[];
 }
 
-// type alias 도 중복되는 속성을 묶을 수 있다.
-// intersection 이라 부르는 기능으로,
-// type [Alias] = [CommonAlias] & {[property]:[type];} 으로 사용가능
-type News = {
-	id: number;
-	time_ago: string;
-	time: number;
-	user: string;
+interface News {
+	readonly id: number;
+	readonly time_ago: string;
+	readonly time: number;
+	readonly user: string;
 	comments_count: number;
 	type: string;
 	url: string;
 }
 
-type NewsFeed = News & {
+interface NewsFeed extends News {
 	title: string;
 	domain: string;
 	points: number;
 	read?: boolean;
 }
 
-type NewsDetail = News & {
+interface NewsDetail extends News {
 	title: string;
 	domain: string;
 	content: string;
@@ -32,12 +30,14 @@ type NewsDetail = News & {
 	comments: [];
 }
 
-type NewsComment = News & {
+interface NewsComment extends News {
 	level: number;
 	content: string;
 	comments: [];
 }
 
+// type alias는 아래 HTMLElement | null 처럼 union 타입을 지원하지만,
+// interface는 union타입을 사용하지 못한다.
 const container: HTMLElement | null = document.getElementById("root");
 const ajax: XMLHttpRequest = new XMLHttpRequest();
 const content = document.createElement("div");
@@ -50,13 +50,6 @@ const store: Store = {
 	feeds: [],
 }
 
-// getData는 사용하는 url 에 따라 반환하는 타입이 다를수 있디ㅏ.
-// 제너릭 : 입력이 n 개라면, 출력도 n 개로 정의함
-// function 함수명<type> 으로 사용한다.
-// 호출시 getData<NewsFeed[]>("http......");  이런 식
-// 반환타입을 특정type으로 받겠다고 명시하고 함수를 호출하므로 헷갈릴 일이 없다.
-// 호출시 함수에 추가 파라미터로 반환타입을 넘겼다고 생각하면 쉽다.
-// 또는 제네럭 함수는 wrapping함수이고, 호출시 반환타입을 특정하여 함수를 생성, 반환, 즉시호출한다고도 볼 수있다.
 function getData<AjaxResponse>(url: string): AjaxResponse {
 	ajax.open("GET", url, false);
 	ajax.send();
@@ -66,7 +59,7 @@ function getData<AjaxResponse>(url: string): AjaxResponse {
 
 function makeFeeds(feeds: NewsFeed[]): NewsFeed[] {
 	for (let i = 0; i < feeds.length; i++) {
-		feeds[i].read = false;
+		feeds[i].read = false; // readonly로 설정하면 경고를 띄운다.
 	}
 
 	return feeds;
@@ -83,7 +76,6 @@ function updateView(html: string): void {
 function newsFeed(): void {
 	let newsFeed: NewsFeed[] = store.feeds;
 	if (newsFeed.length === 0) {
-		// getData를 호출할 때 반환받을 타입을 명시
 		newsFeed = store.feeds = makeFeeds(getData<NewsFeed[]>(NEWS_URL));
 	}
 	const startFeedNumber = (store.currentPage - 1) * store.pageSize;
@@ -146,7 +138,6 @@ function newsFeed(): void {
 
 function newsDetail() {
 	const id = location.hash.substr(7);
-	// getData를 호출할 때 반환받을 타입을 명시
 	const newsContent = getData<NewsDetail>(CONTENT_URL.replace("@id", id));
 	let template = `
     <div class="bg-gray-600 min-h-screen pb-8">
