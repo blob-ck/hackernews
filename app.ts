@@ -53,38 +53,57 @@ const store: Store = {
 	feeds: [],
 }
 
+// MixIN 적용 - 언어에서 지원하지 않고, 코드 테크닉으로 전개
+// 타입스크립트 공식문서에도 나오는 믹스인 코드
+function applyApiMixIns(targetClass: any, baseClasses: any[]): void {
+	baseClasses.forEach((baseClass) => {
+		Object.getOwnPropertyNames(baseClass.prototype).forEach(name => {
+			const descriptor = Object.getOwnPropertyDescriptor(baseClass.prototype, name);
+
+			if (descriptor) {
+				Object.defineProperty(targetClass.prototype, name, descriptor)
+			}
+		})
+	})
+}
+
+// url, ajax 속성은 더이상 필요 없으므로 constructor에서 제거
 class Api {
-	url: string;
-	ajax: XMLHttpRequest;
-	constructor(url: string) {
-		this.url = url;
-		this.ajax = new XMLHttpRequest();
+	getRequest<AjaxResponse>(url: string): AjaxResponse {
+		const ajax = new XMLHttpRequest();
+		ajax.open('GET', url, false);
+		ajax.send();
+
+		return JSON.parse(ajax.response);
 	}
-
-	// 하위클래스에서 사용할 용도로 만든 메소드이므로,
-	// 인스턴스에서 직접호출하는 것을 막기 위해 protected 접근제한자 사용
-	protected getRequest<AjaxResponse>(): AjaxResponse {
-		this.ajax.open('GET', this.url, false);
-		this.ajax.send();
-
-		return JSON.parse(this.ajax.response);
-	}
-
 }
 
-// 아래 클래스단위로 쪼개는게 더 복잡하고 불필요해 보이지만,
-// 형식을 갖춘다는건 규모가 커졌을 때 빛을 발한다.
-class NewsFeedApi extends Api {
+class NewsFeedApi {
 	getData(): NewsFeed[] {
-		return this.getRequest<NewsFeed[]>();
+		return this.getRequest<NewsFeed[]>(NEWS_URL);
 	}
 }
 
-class NewsDetailApi extends Api {
-	getData(): NewsDetail {
-		return this.getRequest<NewsDetail>();
+class NewsDetailApi {
+	getData(id: string): NewsDetail {
+		return this.getRequest<NewsDetail>(CONTENT_URL.replace("@id", id));
 	}
 }
+
+// this.getRequest에 경고 밑줄이 표시되는데 이는 클래스 선언시 상속을 하지 않아서
+// 타입스크립트 컴파일러가 캐치하시 못해서 그렇다.
+// 실제 런타임에 applyApiMixIns가 실행되어야 각 클래스에 Api의 속성들이 추가되므로,
+// 컴퍼일러에 Api를 상속받을거라고 명시해야 this.getRequest접근에 대한 경고를 하지 않는다.
+// => interface를 선언하여 해결한다.
+interface NewsFeedApi extends Api { };
+interface NewsDetailApi extends Api { };
+
+// applyApiMixIns(A, B); -> A에 B의 기능을 확장하겠다는 의미
+// 언어 자체로 상속을 지원하지만 믹스인을 사용하는 이유 두 가지
+// 1. 상속관계에 유연성이 필요할 때 - 필요할 때마다 applyApiMixIns를 호출하여 상속관계를 능동적으로 바꿀 수 있다.
+// 2. 다중상속을 하기 위함 (extends로는 불가능)
+applyApiMixIns(NewsFeedApi, [Api]);
+applyApiMixIns(NewsDetailApi, [Api]);
 
 function getData<AjaxResponse>(url: string): AjaxResponse {
 	ajax.open("GET", url, false);
@@ -110,7 +129,7 @@ function updateView(html: string): void {
 }
 
 function newsFeed(): void {
-	const api = new NewsFeedApi(NEWS_URL);
+	const api = new NewsFeedApi();
 	let newsFeed: NewsFeed[] = store.feeds;
 	if (newsFeed.length === 0) {
 		newsFeed = store.feeds = makeFeeds(api.getData());
@@ -175,8 +194,8 @@ function newsFeed(): void {
 
 function newsDetail() {
 	const id = location.hash.substr(7);
-	const api = new NewsDetailApi(CONTENT_URL.replace("@id", id));
-	const newsContent = api.getData();
+	const api = new NewsDetailApi();
+	const newsContent = api.getData(id);
 	let template = `
     <div class="bg-gray-600 min-h-screen pb-8">
       <div class="bg-white text-xl">
