@@ -1,8 +1,16 @@
-// 작업내용
-// 1. getData 클래스 변환
-// 2. 공통요소 뽑아내기
-// 3. 믹스인을 이용한 상속
-// 4. applyApiMixins
+// 0. function -> class
+// 1. 공통요소추출
+// 2. 구조분해할당
+// 3. 라우터 구현
+// 4. 접근제어
+// 	-	private: 오로지 본클래스의 인스턴스 메서드로만 접근가능
+// 	-	protected: 본클래스, 자식클래스의 인스턴스 메서드로 접근가능
+// 	-	public: 인스턴스에서 직접 접근 가능
+
+// 라우터에서 화면전환시 ~View 클래스의 인스턴스로 render() 호출
+// 각 뷰의 기본 동작들은 클래스의 메서드로 정의
+// 각 뷰의 기본 설정값은 속성으로 정의, 접근제한
+//  => 데이터를 외부로 드러내지 않고 기능으로 제공
 
 interface Store {
 	currentPage: number;
@@ -41,7 +49,11 @@ interface NewsComment extends News {
 	comments: [];
 }
 
-const container: HTMLElement | null = document.getElementById("root");
+interface RouteInfo {
+	path: string;
+	page: View;
+}
+
 const ajax: XMLHttpRequest = new XMLHttpRequest();
 const content = document.createElement("div");
 const NEWS_URL = "https://api.hnpwa.com/v0/news/1.json";
@@ -53,8 +65,6 @@ const store: Store = {
 	feeds: [],
 }
 
-// MixIN 적용 - 언어에서 지원하지 않고, 코드 테크닉으로 전개
-// 타입스크립트 공식문서에도 나오는 믹스인 코드
 function applyApiMixIns(targetClass: any, baseClasses: any[]): void {
 	baseClasses.forEach((baseClass) => {
 		Object.getOwnPropertyNames(baseClass.prototype).forEach(name => {
@@ -67,78 +77,156 @@ function applyApiMixIns(targetClass: any, baseClasses: any[]): void {
 	})
 }
 
-// url, ajax 속성은 더이상 필요 없으므로 constructor에서 제거
 class Api {
-	getRequest<AjaxResponse>(url: string): AjaxResponse {
-		const ajax = new XMLHttpRequest();
-		ajax.open('GET', url, false);
-		ajax.send();
+	ajax: XMLHttpRequest;
+	url: string;
 
-		return JSON.parse(ajax.response);
+	constructor(url: string) {
+		this.ajax = new XMLHttpRequest();
+		this.url = url;
+	}
+
+	getRequest<AjaxResponse>(): AjaxResponse {
+		this.ajax.open('GET', this.url, false);
+		this.ajax.send();
+
+		return JSON.parse(this.ajax.response);
 	}
 }
 
-class NewsFeedApi {
+class NewsFeedApi extends Api {
 	getData(): NewsFeed[] {
-		return this.getRequest<NewsFeed[]>(NEWS_URL);
+		return this.getRequest<NewsFeed[]>();
 	}
 }
 
-class NewsDetailApi {
+class NewsDetailApi extends Api {
 	getData(id: string): NewsDetail {
-		return this.getRequest<NewsDetail>(CONTENT_URL.replace("@id", id));
+		return this.getRequest<NewsDetail>();
 	}
 }
 
-// this.getRequest에 경고 밑줄이 표시되는데 이는 클래스 선언시 상속을 하지 않아서
-// 타입스크립트 컴파일러가 캐치하시 못해서 그렇다.
-// 실제 런타임에 applyApiMixIns가 실행되어야 각 클래스에 Api의 속성들이 추가되므로,
-// 컴퍼일러에 Api를 상속받을거라고 명시해야 this.getRequest접근에 대한 경고를 하지 않는다.
-// => interface를 선언하여 해결한다.
-interface NewsFeedApi extends Api { };
-interface NewsDetailApi extends Api { };
+// 라우터의 역할은 -> hash가 변경되었을 때 해당 화면으로 전환하는 것
+// 정의한 각 화면에 해당하는 View클래스의 render()를 호출한다.
+// View클래스는 몇개를 가져올 지 모름
+// 그에 일치하는 hash값도 몇개가 추가될 지 모름
+// 객체형태의 map데이터에 추가
+// hash에 따른 수행할 작업도 정의 하려면 객체형태가 편함
+// hash에 따른 속성과 작업을 정의? 클래스? 어떻게 하는게 유지보수하기 좋은가?(확장성, 안정성, 가독성, ...)
+// 1.소스구현을 한 뒤 공통부분을 묶어 클래스로 만들거나,
+// 2.필요한 작업을 명명한 뒤 구현해 나가는 방법 중
+// 2의 방법으로 라우터 구현
+class Router {
 
-// applyApiMixIns(A, B); -> A에 B의 기능을 확장하겠다는 의미
-// 언어 자체로 상속을 지원하지만 믹스인을 사용하는 이유 두 가지
-// 1. 상속관계에 유연성이 필요할 때 - 필요할 때마다 applyApiMixIns를 호출하여 상속관계를 능동적으로 바꿀 수 있다.
-// 2. 다중상속을 하기 위함 (extends로는 불가능)
-applyApiMixIns(NewsFeedApi, [Api]);
-applyApiMixIns(NewsDetailApi, [Api]);
+	defaultRoute: RouteInfo | null;
+	routeTable: RouteInfo[];
 
-function getData<AjaxResponse>(url: string): AjaxResponse {
-	ajax.open("GET", url, false);
-	ajax.send();
+	constructor() {
 
-	return JSON.parse(ajax.response);
-}
+		// 아래처럼 이벤트를 등록하면, this.route를 호출하는건 브라우저의 이벤트시스템이므로
+		// this가 가리키는 컨텍스트가 원하는 컨텍스트(여기서는 Route의 인스턴스)와 일치하지 않는다.
+		// bind(this)로 현재 컨텍스트를 지정하여 엄한걸 가리키지 않도록 한다.
+		// window.addEventListener("hashchange", this.route);
+		// 최초 진입시 hashchange 이벤트는 발생하지 않으므로,
+		// Route인스턴스 생성 후 필요한 path, page 정보를 등록한 후 
+		// router.route() 실행
+		window.addEventListener("hashchange", this.route.bind(this));
 
-function makeFeeds(feeds: NewsFeed[]): NewsFeed[] {
-	for (let i = 0; i < feeds.length; i++) {
-		feeds[i].read = false;
+		this.defaultRoute = null;
+		this.routeTable = [];
 	}
 
-	return feeds;
-}
+	setDefaultPage(page: View): void {
+		this.defaultRoute = { path: "", page };
+	}
 
-function updateView(html: string): void {
-	if (container != null) {
-		container.innerHTML = html;
-	} else {
-		console.error('최상위 컨테이너가 없어 UI를 렌더링하지 못합니다.');
+	addRoutePath(path: string, page: View): void {
+		this.routeTable.push({ path, page });
+	}
+
+	route(): void {
+		const routePath = location.hash;
+		if (routePath == "" && this.defaultRoute) {
+			this.defaultRoute.page.render();
+			return;
+		}
+
+		for (const routeInfo of this.routeTable) {
+			if (routePath.indexOf(routeInfo.path) >= 0) {
+				routeInfo.page.render();
+				break;
+			}
+		}
 	}
 }
 
-function newsFeed(): void {
-	const api = new NewsFeedApi();
-	let newsFeed: NewsFeed[] = store.feeds;
-	if (newsFeed.length === 0) {
-		newsFeed = store.feeds = makeFeeds(api.getData());
-	}
-	const startFeedNumber = (store.currentPage - 1) * store.pageSize;
-	const endFeedNumber = Math.min(store.currentPage * store.pageSize, newsFeed.length) - 1;
 
-	const newsList = [];
-	let template = `
+
+// 공통 View 클래스
+abstract class View {
+	private container: HTMLElement;
+	private template: string; // 원본 -> {{__key__}} 를 그대로 가지고 있는 원본문자열
+	private renderTemplate: string; // replace된 html -> {{__key__}} 를 value로 바꾼 문자열
+	private htmlList: string[];
+
+	constructor(containerId: string, template: string) {
+		const containerElement = document.getElementById(containerId);
+		// container element가 없다면 앱 실행을 하지 못하므로,
+		// this.container 타입에 union type으로 null을 쓰기보단 throw
+		if (!containerElement) {
+			throw '최상위 컨테이너가 없어 UI를 렌더링하지 못합니다.';
+		}
+
+		this.container = containerElement;
+		this.template = template;
+		this.renderTemplate = template;
+		this.htmlList = [];
+	}
+
+	protected updateView(): void {
+		this.container.innerHTML = this.renderTemplate;
+		this.renderTemplate = this.template; // 데이터를 템플릿에 적용하여 렌더링 후 초기값으로 되돌림
+	}
+
+	// 마크업 조각들을 htmlsList에 push
+	protected addHtml(htmlString: string): void {
+		this.htmlList.push(htmlString);
+	}
+
+	// htmlList를 하나의 문자열로 합쳐 반환
+	// getHtml을 호출하는 시점은 템플릿에 데이터를 매핑했을때 즉 렌더링에 필요한 준비를 끝낸 시점
+	//  -> htmlList 배열을 초기화하여 다음 작업을 대비
+	protected getHtml(): string {
+		const snapshot = this.htmlList.join("");
+		// this.htmlList = []; // 이렇게 직접 속성에 값을 할당하기보다, 메소드로 제공
+		this.clearHtmlList();
+		return snapshot;
+	}
+
+	private clearHtmlList(): void {
+		this.htmlList = [];
+	}
+
+	// 구리고 반복되는 작업을 하나의 기능으로 제공
+	// template = template.replace("{{__변수명__}}", 값)
+	protected setTemplateData(key: string, value: string): void {
+		this.renderTemplate = this.renderTemplate.replace(`{{__${key}__}}`, value);
+	}
+
+	abstract render(): void;
+}
+
+
+// 인스턴스에 정보를 저장해 뒀다가 필요한 경우에 재사용
+class NewsFeedView extends View {
+	// 해당 인스턴스의 고유한 값들을 생성자에서 세팅
+	// 변경될 수 있는 값과 고정값들을 분류
+	// => 인스턴스의 속성값이 결정되는 시점을 생각하면 됨
+	// => 라우터에서 인스턴스의 메소드를 호출하는 시점에 결정되는 값이 있다든가(detail 의 id)
+	private api: NewsFeedApi;
+	private feeds: NewsFeed[];
+	constructor(containerId: string) {
+		const template = `
 		<div class="bg-gray-600 min-h-screen">
 			<div class="bg-white text-xl">
 				<div class="mx-auto px-4">
@@ -161,115 +249,138 @@ function newsFeed(): void {
 				{{__news_feed__}}
 			</div>
 		</div>
-	`;
+		`;
 
-	for (let i = startFeedNumber; i <= endFeedNumber; i++) {
-		newsList.push(`
-			<div class="p-6 ${newsFeed[i].read ? "bg-yellow-500" : "bg-white"} mt-6 rounded-lg shadow-md transition-colors duration-500 hover:bg-green-100">
-				<div class="flex">
-					<div class="flex-auto">
-						<a href="#/show/${newsFeed[i].id}">${newsFeed[i].title}</a>
+		super(containerId, template);
+		this.api = new NewsFeedApi(NEWS_URL);
+		this.feeds = store.feeds;
+		if (this.feeds.length === 0) {
+			this.feeds = store.feeds = this.api.getData();
+			this.makeFeeds();
+		}
+	}
+
+	render() {
+		store.currentPage = Number(location.hash.substr(7) || 1);
+		const startFeedNumber = (store.currentPage - 1) * store.pageSize;
+		const endFeedNumber = Math.min(store.currentPage * store.pageSize, this.feeds.length) - 1;
+		for (let i = startFeedNumber; i <= endFeedNumber; i++) {
+			const { read, id, title, comments_count, user, points, time_ago } = this.feeds[i];
+			this.addHtml(`
+					<div class="p-6 ${read ? "bg-yellow-500" : "bg-white"} mt-6 rounded-lg shadow-md transition-colors duration-500 hover:bg-green-100">
+						<div class="flex">
+							<div class="flex-auto">
+								<a href="#/show/${id}">${title}</a>
+							</div>
+							<div class="text-center text-sm">
+								<div class="w-10 text-white bg-green-300 rounded-lg px-0 py-2">${comments_count}</div>
+							</div>
+						</div>
+						<div class="flex mt-3">
+							<div class="grid grid-cols-3 text-sm text-gray-500">
+								<div><i class="fas fa-user mr-1"></i>${user}</div>
+								<div><i class="fas fa-heart mr-1"></i>${points}</div>
+								<div><i class="far fa-clock mr-1"></i>${time_ago}</div>
+							</div>
+						</div>
 					</div>
-					<div class="text-center text-sm">
-						<div class="w-10 text-white bg-green-300 rounded-lg px-0 py-2">${newsFeed[i].comments_count}</div>
+				`);
+		}
+
+		this.setTemplateData("news_feed", this.getHtml());
+		this.setTemplateData("prev_page", String(store.currentPage - 1 > 0 ? store.currentPage - 1 : 1));
+		this.setTemplateData("next_page", String(this.feeds.length - 1 !== endFeedNumber ? store.currentPage + 1 : store.currentPage));
+
+		this.updateView();
+	}
+
+	private makeFeeds(): void {
+		for (let i = 0; i < this.feeds.length; i++) {
+			this.feeds[i].read = false;
+		}
+	}
+}
+
+class NewsDetailView extends View {
+	constructor(containerId: string) {
+		let template = `
+			<div class="bg-gray-600 min-h-screen pb-8">
+				<div class="bg-white text-xl">
+					<div class="mx-auto px-4">
+						<div class="flex justify-between items-center py-6">
+							<div class="flex justify-start">
+								<h1 class="font-extrabold">Hacker News</h1>
+							</div>
+							<div class="items-center justify-end">
+								<a href="#/page/{{__currentPage__}}" class="text-gray-500">
+									<i class="fa fa-times"></i>
+								</a>
+							</div>
+						</div>
 					</div>
 				</div>
-				<div class="flex mt-3">
-					<div class="grid grid-cols-3 text-sm text-gray-500">
-						<div><i class="fas fa-user mr-1"></i>${newsFeed[i].user}</div>
-						<div><i class="fas fa-heart mr-1"></i>${newsFeed[i].points}</div>
-						<div><i class="far fa-clock mr-1"></i>${newsFeed[i].time_ago}</div>
+	
+				<div class="h-full border rounded-xl bg-white m-6 p-4 ">
+					<h2>{{__title__}}</h2>
+					<div class="text-gray-400 h-20">
+						{{__content__}}
 					</div>
+					{{__comments__}}
 				</div>
 			</div>
-		`);
+		`;
+
+		super(containerId, template);
 	}
 
-	template = template.replace("{{__news_feed__}}", newsList.join(""));
-	template = template.replace("{{__prev_page__}}", String(store.currentPage - 1 > 0 ? store.currentPage - 1 : 1));
-	template = template.replace("{{__next_page__}}", String(newsFeed.length - 1 !== endFeedNumber ? store.currentPage + 1 : store.currentPage));
-
-	updateView(template);
-}
-
-function newsDetail() {
-	const id = location.hash.substr(7);
-	const api = new NewsDetailApi();
-	const newsContent = api.getData(id);
-	let template = `
-    <div class="bg-gray-600 min-h-screen pb-8">
-      <div class="bg-white text-xl">
-        <div class="mx-auto px-4">
-          <div class="flex justify-between items-center py-6">
-            <div class="flex justify-start">
-              <h1 class="font-extrabold">Hacker News</h1>
-            </div>
-            <div class="items-center justify-end">
-              <a href="#/page/${store.currentPage}" class="text-gray-500">
-                <i class="fa fa-times"></i>
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="h-full border rounded-xl bg-white m-6 p-4 ">
-        <h2>${newsContent.title}</h2>
-        <div class="text-gray-400 h-20">
-          ${newsContent.content}
-        </div>
-
-        {{__comments__}}
-
-      </div>
-    </div>
-	`;
-
-	for (let i = 0; i < store.feeds.length; i++) {
-		if (Number(store.feeds[i].id) == Number(id)) {
-			store.feeds[i].read = true;
-			break;
+	render() {
+		const id = location.hash.substr(7);
+		const api = new NewsDetailApi(CONTENT_URL.replace("@id", id));
+		const newsContent = api.getData(id);
+		const { title, content, comments } = newsContent;
+		for (let i = 0; i < store.feeds.length; i++) {
+			if (Number(store.feeds[i].id) == Number(id)) {
+				store.feeds[i].read = true;
+				break;
+			}
 		}
+
+		this.setTemplateData("currentPage", String(store.currentPage));
+		this.setTemplateData("title", title);
+		this.setTemplateData("content", content);
+		this.setTemplateData("comments", this.makeComment(comments));
+
+		this.updateView();
 	}
 
-	updateView(template.replace("{{__comments__}}", makeComment(newsContent.comments)));
-}
-
-function makeComment(comments: NewsComment[]): string {
-	const commentString = [];
-	for (let i = 0; i < comments.length; i++) {
-		const comment: NewsComment = comments[i];
-		commentString.push(`
-				<div style="padding-left: ${comment.level * 40}px;" class="mt-4">
-					<div class="text-gray-400">
-						<i class="fa fa-sort-up mr-2"></i>
-						<strong>${comment.user}</strong> ${comment.time_ago}
+	private makeComment(comments: NewsComment[]): string {
+		for (let i = 0; i < comments.length; i++) {
+			const comment: NewsComment = comments[i];
+			this.addHtml(`
+					<div style="padding-left: ${comment.level * 40}px;" class="mt-4">
+						<div class="text-gray-400">
+							<i class="fa fa-sort-up mr-2"></i>
+							<strong>${comment.user}</strong> ${comment.time_ago}
+						</div>
+						<p class="text-gray-700">${comment.content}</p>
 					</div>
-					<p class="text-gray-700">${comment.content}</p>
-				</div>
-			`);
+				`);
 
-		if (comment.comments.length > 0) {
-			commentString.push(makeComment(comment.comments));
+			if (comment.comments.length > 0) {
+				this.addHtml(this.makeComment(comment.comments));
+			}
 		}
-	}
 
-	return commentString.join("");
-}
-
-function router() {
-	const routePath = location.hash;
-
-	if (routePath === "") {
-		newsFeed();
-	} else if (routePath.indexOf("/page/") >= 0) {
-		store.currentPage = Number(routePath.substr(7));
-		newsFeed();
-	} else {
-		newsDetail();
+		return this.getHtml();
 	}
 }
 
-window.addEventListener("hashchange", router);
 
-router();
+const router = new Router();
+const newsFeedView = new NewsFeedView("root");
+const newsDetailView = new NewsDetailView("root");
+
+router.setDefaultPage(newsFeedView);
+router.addRoutePath("/page/", newsFeedView);
+router.addRoutePath("/show/", newsDetailView);
+router.route();
