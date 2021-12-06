@@ -26,7 +26,6 @@ export default class Router {
     // app.ts 에서 router.route() 를 실행하던 것에서,
     // private으로 감추고 최초 addRoutePath 호출시 한 번은 자동으로 실행되도록 수정
     if (!this.isStart) {
-      console.log('최초 조회 시작')
       this.isStart = true;
       setTimeout(this.route.bind(this), 0)
     }
@@ -34,7 +33,6 @@ export default class Router {
 
   private route(): void {
     const routePath = location.hash;
-    console.log(routePath)
     if (routePath === "" && this.defaultRoute) {
       this.defaultRoute.page.render();
       return;

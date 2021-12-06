@@ -39,15 +39,13 @@ export default class NewsFeedView extends View {
 
 		this.api = new NewsFeedApi(NEWS_URL);
 		this.store = store;
-		console.log(this.store)
 	}
 
 	render = (page: string = '1'): void => {
 		this.store.currentPage = Number(page);
-		console.log(page, this.store)
 
 		if (!this.store.hasFeeds) {
-			this.api.getData((feeds: NewsFeed[]) => {
+			this.api.getDataWithPromise((feeds: NewsFeed[]) => {
 				this.store.setFeeds(feeds);
 				this.renderView();
 			});
@@ -58,7 +56,6 @@ export default class NewsFeedView extends View {
 	renderView = (): void => {
 		const startFeedNumber = (this.store.currentPage - 1) * this.store.pageSize;
 		const endFeedNumber = Math.min(this.store.currentPage * this.store.pageSize, this.store.numberOfFeed) - 1;
-		console.log(this.store.currentPage, this.store.pageSize, this.store.numberOfFeed);
 
 		for (let i = startFeedNumber; i <= endFeedNumber; i++) {
 			const { read, id, title, comments_count, user, points, time_ago } = this.store.getFeed(i);
