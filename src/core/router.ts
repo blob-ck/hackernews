@@ -22,9 +22,6 @@ export default class Router {
 
   addRoutePath(path: string, page: View, params: RegExp | null = null): void {
     this.routeTable.push({ path, page, params });
-
-    // app.ts 에서 router.route() 를 실행하던 것에서,
-    // private으로 감추고 최초 addRoutePath 호출시 한 번은 자동으로 실행되도록 수정
     if (!this.isStart) {
       this.isStart = true;
       setTimeout(this.route.bind(this), 0)
@@ -41,7 +38,6 @@ export default class Router {
     for (const routeInfo of this.routeTable) {
       if (routePath.indexOf(routeInfo.path) >= 0) {
 
-        // RouteInfo 의 세번째 인자(params)로 hash값을 분해할 정규식 사용
         if (routeInfo.params) {
           const parseParams = routePath.match(routeInfo.params);
 
